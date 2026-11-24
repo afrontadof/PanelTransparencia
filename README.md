@@ -5,10 +5,13 @@ Prototipo del artículo *"Panel de Transparencia de Contrataciones del Estado: D
 Ingesta órdenes de servicio de los Catálogos Electrónicos de Acuerdos Marco (Perú Compras), valida el RUC (11 dígitos + módulo 11 SUNAT), calcula métricas y las expone en una API REST y un panel web.
 
 ## Ejecutar
-Requisitos: JDK 21 y Maven.
+Requisitos: JDK 21 
 ```bash
-mvn test                 # pruebas unitarias (JUnit 5 + Mockito)
-mvn compile exec:java    # inicia en http://localhost:8080
+mkdir out
+dir /s /b src\main\java\*.java > sources.txt
+javac -encoding UTF-8 -d out @sources.txt
+xcopy /e /i /y src\main\resources\static out\static
+java -cp out pe.lasalle.transparencia.web.Main
 ```
 En el panel: **Cargar dataset → Usar dataset de muestra** (o sube `data/muestra.csv`).
 
