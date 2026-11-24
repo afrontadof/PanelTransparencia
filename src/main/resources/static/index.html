@@ -1,0 +1,91 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Panel de Transparencia de Contrataciones del Estado</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b2430;--mut:#6b7686;--bd:#e2e6ec;--ac:#1d4ed8;--ok:#0f9d58;--er:#c0392b}
+@media(prefers-color-scheme:dark){:root{--bg:#10151c;--card:#182029;--tx:#e8edf3;--mut:#93a0b1;--bd:#2a3542;--ac:#6ea0ff;--ok:#43c37f;--er:#ff7b6b}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+header{display:flex;gap:16px;align-items:center;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--bd);flex-wrap:wrap}
+header b{font-size:16px;margin-right:auto}nav button{background:none;border:0;color:var(--mut);padding:6px 10px;cursor:pointer;font:inherit}
+nav button.on{color:var(--ac);border-bottom:2px solid var(--ac)}main{max-width:1100px;margin:16px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+input,select,button.b{padding:7px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--tx);font:inherit}
+button.p{background:var(--ac);color:#fff;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd)}th{color:var(--mut);font-weight:600}
+.k{font-size:22px;font-weight:700}.mut{color:var(--mut)}.ok{color:var(--ok)}.er{color:var(--er)}
+.bar{height:6px;background:var(--bd);border-radius:3px;margin-top:3px}.bar i{display:block;height:100%;background:var(--ac);border-radius:3px}
+.sec{display:none}.sec.on{display:block}.num{text-align:right;font-variant-numeric:tabular-nums}
+</style></head><body>
+<header><b>Panel de Transparencia</b><nav id="nav"></nav></header>
+<main>
+<div class="card row" id="filtros">
+ <select id="acuerdo"><option value="">Todos los acuerdos marco</option></select>
+ <select id="estado"><option value="">Todos los estados</option></select>
+ <input id="q" placeholder="Buscar RUC, entidad u orden">
+ <select id="top"><option>5</option><option>10</option></select>
+ <button class="p" onclick="refrescar()">Aplicar</button>
+</div>
+
+<section class="sec on" id="s-inicio">
+ <div id="vacio" class="card">Aún no hay datos. Ve a <a href="#" onclick="ir('cargar');return false">Cargar dataset</a> o usa el dataset de muestra.</div>
+ <div class="grid">
+  <div class="card"><div class="mut">Gasto total</div><div class="k" id="k-gasto">—</div></div>
+  <div class="card"><div class="mut">Órdenes válidas</div><div class="k ok" id="k-val">—</div></div>
+  <div class="card"><div class="mut">RUC descartados</div><div class="k er" id="k-desc">—</div></div>
+ </div>
+ <div class="grid"><div class="card"><b>Top proveedores por monto</b><div id="i-prov"></div></div>
+ <div class="card"><b>Gasto por estado</b><div id="i-est"></div></div></div>
+ <div class="row"><button class="p" onclick="exportar()">Exportar CSV</button><button class="b" onclick="alert('RF-13: exportación PDF pendiente (ver README, hoja de ruta)')">Exportar PDF</button></div>
+</section>
+
+<section class="sec" id="s-cargar">
+ <div class="card"><b>Cargar dataset (CSV de Perú Compras)</b>
+  <p class="mut">Columnas: ORDEN_ELECTRONICA, TOTAL, ESTADO_ORDEN_ELECTRONICA, ACUERDO_MARCO, RUC_PROVEEDOR (+ PROVEEDOR, ENTIDAD).</p>
+  <div class="row"><input type="file" id="file" accept=".csv"><button class="p" onclick="subir()">Procesar</button>
+  <button class="b" onclick="muestra()">Usar dataset de muestra</button></div><p id="res"></p></div>
+ <div class="card"><div class="row"><b style="margin-right:auto">Log de RUC descartados (auditoría)</b>
+  <a href="/api/auditoria/rucs-csv"><button class="b">Exportar log (.csv)</button></a></div>
+  <table><thead><tr><th>Fila</th><th>N° orden</th><th>RUC</th><th>Motivo</th></tr></thead><tbody id="log"></tbody></table></div>
+</section>
+
+<section class="sec" id="s-ordenes"><div class="card"><table><thead><tr><th>N° orden</th><th>Acuerdo marco</th><th>Proveedor</th><th>Entidad</th><th class="num">Total (S/)</th><th>Estado</th></tr></thead><tbody id="ord"></tbody></table>
+ <div class="row" style="margin-top:10px"><button class="b" onclick="pag(-1)">Anterior</button><span id="pg" class="mut"></span><button class="b" onclick="pag(1)">Siguiente</button></div></div></section>
+
+<section class="sec" id="s-rankings"><div class="grid">
+ <div class="card"><b>Top proveedores</b><div id="r-prov"></div></div><div class="card"><b>Top entidades compradoras</b><div id="r-ent"></div></div></div></section>
+
+<section class="sec" id="s-reportes"><div class="card"><b>Reportes</b><p class="mut">Descarga métricas y rankings con los filtros actuales.</p>
+ <button class="p" onclick="exportar()">Descargar CSV</button></div></section>
+</main>
+<script>
+const S=['inicio','cargar','ordenes','rankings','reportes'],N={inicio:'Inicio',cargar:'Cargar dataset',ordenes:'Órdenes',rankings:'Rankings',reportes:'Reportes'};
+let page=1,total=0;const $=i=>document.getElementById(i);
+const sol=n=>'S/ '+Number(n).toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+$('nav').innerHTML=S.map(s=>`<button id="n-${s}" onclick="ir('${s}')">${N[s]}</button>`).join('');
+function ir(s){S.forEach(x=>{$('s-'+x).classList.toggle('on',x==s);$('n-'+x).classList.toggle('on',x==s)});if(s=='ordenes')ordenes()}
+function qs(){const p=new URLSearchParams();for(const k of['acuerdo','estado','q'])if($(k).value)p.set(k,$(k).value);p.set('top',$('top').value);return p}
+function barras(el,items){const m=Math.max(...items.map(i=>+i.monto),1);$(el).innerHTML=items.map((i,n)=>`<div style="margin-top:8px"><div class="row"><span style="margin-right:auto">${n+1}. ${esc(i.nombre)}</span><b>${sol(i.monto)}</b></div><div class="bar"><i style="width:${i.monto/m*100}%"></i></div></div>`).join('')||'<p class="mut">Sin datos</p>'}
+async function refrescar(){page=1;const p=qs();
+ const r=await (await fetch('/api/metricas/resumen?'+p)).json(),k=await (await fetch('/api/rankings?'+p)).json();
+ $('vacio').style.display=r.ordenes||r.ordenesValidas?'none':'block';
+ $('k-gasto').textContent=sol(r.gastoTotal);$('k-val').textContent=r.ordenesValidas;$('k-desc').textContent=r.rucDescartados;
+ barras('i-prov',k.proveedores);barras('r-prov',k.proveedores);barras('r-ent',k.entidades);
+ barras('i-est',Object.entries(r.gastoPorEstado).map(([nombre,monto])=>({nombre,monto})));ordenes()}
+async function ordenes(){const p=qs();p.set('page',page);p.set('size',10);const r=await (await fetch('/api/ordenes?'+p)).json();total=r.total;
+ $('ord').innerHTML=r.items.map(o=>`<tr><td>${esc(o.orden)}</td><td>${esc(o.acuerdoMarco)}</td><td>${esc(o.proveedor)}<br><small class="mut">RUC ${o.ruc}</small></td><td>${esc(o.entidad)}</td><td class="num">${sol(o.total)}</td><td>${esc(o.estado)}</td></tr>`).join('');
+ $('pg').textContent=`Mostrando ${r.items.length} de ${total} órdenes · pág. ${page}`;}
+function pag(d){if(page+d<1||(page+d-1)*10>=total)return;page+=d;ordenes()}
+async function filtrosOpc(){const r=await (await fetch('/api/ordenes?size=200')).json();
+ for(const[id,f]of[['acuerdo','acuerdoMarco'],['estado','estado']]){const v=$(id).value;const u=[...new Set(r.items.map(o=>o[f]))].sort();
+  $(id).innerHTML=$(id).options[0].outerHTML+u.map(x=>`<option>${esc(x)}</option>`).join('');$(id).value=v}}
+async function mostrar(r){$('res').innerHTML=`<span class="ok">✓ ${r.leidas} leídas</span> · <span class="ok">${r.validas} válidas</span> · <span class="er">${r.descartadas} descartadas</span>`;
+ $('log').innerHTML=r.descartes.map(d=>`<tr><td>${d.fila}</td><td>${esc(d.orden)}</td><td>${esc(d.ruc)}</td><td class="er">${esc(d.motivo)}</td></tr>`).join('');
+ await filtrosOpc();refrescar()}
+async function subir(){const f=$('file').files[0];if(!f)return alert('Elige un archivo CSV');
+ mostrar(await (await fetch('/api/datasets/cargar',{method:'POST',body:f})).json())}
+async function muestra(){const t=await (await fetch('/muestra.csv')).text().catch(()=>null);if(!t)return alert('Sube data/muestra.csv manualmente');
+ mostrar(await (await fetch('/api/datasets/cargar',{method:'POST',body:t})).json())}
+function exportar(){location='/api/reportes/exportar?formato=csv&'+qs()}
+ir('inicio');refrescar();
+</script></body></html>
